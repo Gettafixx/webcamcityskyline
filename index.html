@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Particle Skyline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: linear-gradient(to bottom, #0a0e27 0%, #1a1f3a 50%, #2d3561 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        #canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        #videoCanvas, #video {
+            display: none;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            color: white;
+            width: 280px;
+            transition: transform 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .controls.hidden {
+            transform: translateX(-320px);
+        }
+        
+        .control-group {
+            margin-bottom: 18px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            color: #8b92ff;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4a5fff;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb:hover {
+            background: #6b7cff;
+        }
+        
+        .control-group .value {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 14px;
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 10px;
+            background: #4a5fff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background: #6b7cff;
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        #toggleUI {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: auto;
+            padding: 10px 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        
+        .camera-status {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .camera-status.active {
+            color: #4eff4e;
+        }
+        
+        .camera-status.inactive {
+            color: #ff4e4e;
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay></video>
+    <canvas id="videoCanvas"></canvas>
+    <canvas id="canvas"></canvas>
+    
+    <button id="toggleUI">Hide UI</button>
+    
+    <div class="controls" id="controls">
+        <h3 style="margin-bottom: 20px; text-align: center; color: #8b92ff;">Motion Particle Controls</h3>
+        
+        <div class="control-group">
+            <label>Particle Count: <span class="value" id="particleCountValue">2000</span></label>
+            <input type="range" id="particleCount" min="500" max="5000" value="2000" step="100">
+        </div>
+        
+        <div class="control-group">
+            <label>Gravity: <span class="value" id="gravityValue">0.15</span></label>
+            <input type="range" id="gravity" min="0" max="1" value="0.15" step="0.01">
+        </div>
+        
+        <div class="control-group">
+            <label>Motion Sensitivity: <span class="value" id="sensitivityValue">30</span></label>
+            <input type="range" id="sensitivity" min="10" max="100" value="30" step="5">
+        </div>
+        
+        <div class="control-group">
+            <label>Grid Resolution: <span class="value" id="gridResValue">20</span></label>
+            <input type="range" id="gridRes" min="10" max="50" value="20" step="5">
+        </div>
+        
+        <div class="control-group">
+            <label>Return Time (ms): <span class="value" id="returnTimeValue">3000</span></label>
+            <input type="range" id="returnTime" min="1000" max="10000" value="3000" step="500">
+        </div>
+        
+        <div class="control-group">
+            <label>Lift Force: <span class="value" id="liftForceValue">0.8</span></label>
+            <input type="range" id="liftForce" min="0.1" max="2" value="0.8" step="0.1">
+        </div>
+        
+        <div class="button-group">
+            <button id="fullscreenBtn">Fullscreen</button>
+            <button id="mirrorBtn">Mirror</button>
+        </div>
+        
+        <div class="button-group">
+            <button id="resetBtn">Reset</button>
+        </div>
+        
+        <div class="camera-status inactive" id="cameraStatus">
+            Camera: Initializing...
+        </div>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('video');
+        const videoCanvas = document.getElementById('videoCanvas');
+        const videoCtx = videoCanvas.getContext('2d');
+        
+        let particles = [];
+        let motionGrid = [];
+        let previousFrame = null;
+        let mirrored = false;
+        let uiHidden = false;
+        
+        // Settings
+        let settings = {
+            particleCount: 2000,
+            gravity: 0.15,
+            sensitivity: 30,
+            gridResolution: 20,
+            returnTime: 3000,
+            liftForce: 0.8
+        };
+        
+        // NYC Skyline shape (simplified)
+        const skylinePoints = [
+            {x: 0.05, y: 0.7},
+            {x: 0.1, y: 0.5},
+            {x: 0.15, y: 0.55},
+            {x: 0.2, y: 0.3},  // Empire State area
+            {x: 0.25, y: 0.35},
+            {x: 0.3, y: 0.6},
+            {x: 0.35, y: 0.4},
+            {x: 0.4, y: 0.45},
+            {x: 0.45, y: 0.25}, // Chrysler area
+            {x: 0.5, y: 0.3},
+            {x: 0.55, y: 0.5},
+            {x: 0.6, y: 0.35},
+            {x: 0.65, y: 0.4},
+            {x: 0.7, y: 0.2},   // One WTC area
+            {x: 0.75, y: 0.45},
+            {x: 0.8, y: 0.5},
+            {x: 0.85, y: 0.55},
+            {x: 0.9, y: 0.6},
+            {x: 0.95, y: 0.7}
+        ];
+        
+        class Particle {
+            constructor() {
+                this.reset();
+                this.targetY = null;
+                this.returnTimer = 0;
+                this.isLifted = false;
+            }
+            
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = canvas.height - Math.random() * 50;
+                this.baseY = this.y;
+                this.vx = 0;
+                this.vy = 0;
+                this.size = Math.random() * 2 + 1;
+                this.opacity = Math.random() * 0.5 + 0.5;
+                
+                // Assign skyline target position
+                const index = Math.floor(Math.random() * skylinePoints.length);
+                const point = skylinePoints[index];
+                this.skylineX = point.x * canvas.width;
+                this.skylineY = point.y * canvas.height;
+            }
+            
+            update(motionValue) {
+                // Apply motion force
+                if (motionValue > 0) {
+                    const force = motionValue * settings.liftForce;
+                    this.vy -= force;
+                    
+                    // Move towards skyline position
+                    const dx = this.skylineX - this.x;
+                    const dy = this.skylineY - this.y;
+                    this.vx += dx * 0.001 * force;
+                    this.vy += dy * 0.001 * force;
+                    
+                    this.isLifted = true;
+                    this.returnTimer = settings.returnTime;
+                } else if (this.returnTimer > 0) {
+                    this.returnTimer -= 16; // Approximate frame time
+                }
+                
+                // Return to base when timer expires
+                if (this.returnTimer <= 0 && this.isLifted) {
+                    const returnForce = 0.02;
+                    const dx = this.x - (Math.random() * canvas.width);
+                    const dy = this.baseY - this.y;
+                    this.vx -= dx * returnForce;
+                    this.vy += dy * returnForce * 2;
+                    
+                    if (Math.abs(this.y - this.baseY) < 5) {
+                        this.isLifted = false;
+                    }
+                }
+                
+                // Apply gravity
+                this.vy += settings.gravity;
+                
+                // Apply damping
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                
+                // Update position
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundaries
+                if (this.x < 0 || this.x > canvas.width) {
+                    this.vx *= -0.5;
+                    this.x = Math.max(0, Math.min(canvas.width, this.x));
+                }
+                
+                if (this.y > canvas.height - 10) {
+                    this.y = canvas.height - 10;
+                    this.vy *= -0.3;
+                    this.vx *= 0.9;
+                }
+                
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.vy *= -0.5;
+                }
+            }
+            
+            draw() {
+                const brightness = this.isLifted ? 1 : 0.6;
+                const color = this.isLifted ? 
+                    `rgba(100, 150, 255, ${this.opacity * brightness})` :
+                    `rgba(255, 255, 255, ${this.opacity * brightness * 0.5})`;
+                
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add glow effect for lifted particles
+                if (this.isLifted) {
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = 'rgba(100, 150, 255, 0.5)';
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+        
+        function initCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            videoCanvas.width = 640;
+            videoCanvas.height = 480;
+        }
+        
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < settings.particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+        
+        function initMotionGrid() {
+            motionGrid = [];
+            const cols = settings.gridResolution;
+            const rows = Math.floor(settings.gridResolution * (canvas.height / canvas.width));
+            
+            for (let i = 0; i < cols; i++) {
+                motionGrid[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    motionGrid[i][j] = 0;
+                }
+            }
+        }
+        
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640, 
+                        height: 480 
+                    } 
+                });
+                video.srcObject = stream;
+                
+                document.getElementById('cameraStatus').textContent = 'Camera: Active';
+                document.getElementById('cameraStatus').className = 'camera-status active';
+            } catch (err) {
+                console.error('Camera access denied:', err);
+                document.getElementById('cameraStatus').textContent = 'Camera: Access Denied';
+                document.getElementById('cameraStatus').className = 'camera-status inactive';
+            }
+        }
+        
+        function detectMotion() {
+            if (!video.videoWidth) return;
+            
+            videoCtx.save();
+            if (mirrored) {
+                videoCtx.scale(-1, 1);
+                videoCtx.drawImage(video, -videoCanvas.width, 0, videoCanvas.width, videoCanvas.height);
+            } else {
+                videoCtx.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+            }
+            videoCtx.restore();
+            
+            const currentFrame = videoCtx.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
+            
+            if (previousFrame) {
+                const cols = settings.gridResolution;
+                const rows = Math.floor(settings.gridResolution * (canvas.height / canvas.width));
+                const cellWidth = videoCanvas.width / cols;
+                const cellHeight = videoCanvas.height / rows;
+                
+                // Reset motion grid
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        motionGrid[i][j] *= 0.9; // Decay
+                    }
+                }
+                
+                // Detect motion in each grid cell
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let motion = 0;
+                        let pixelCount = 0;
+                        
+                        const startX = Math.floor(i * cellWidth);
+                        const endX = Math.floor((i + 1) * cellWidth);
+                        const startY = Math.floor(j * cellHeight);
+                        const endY = Math.floor((j + 1) * cellHeight);
+                        
+                        for (let x = startX; x < endX; x += 2) {
+                            for (let y = startY; y < endY; y += 2) {
+                                const idx = (y * videoCanvas.width + x) * 4;
+                                
+                                const rDiff = Math.abs(currentFrame.data[idx] - previousFrame.data[idx]);
+                                const gDiff = Math.abs(currentFrame.data[idx + 1] - previousFrame.data[idx + 1]);
+                                const bDiff = Math.abs(currentFrame.data[idx + 2] - previousFrame.data[idx + 2]);
+                                
+                                const diff = (rDiff + gDiff + bDiff) / 3;
+                                if (diff > settings.sensitivity) {
+                                    motion += diff;
+                                    pixelCount++;
+                                }
+                            }
+                        }
+                        
+                        if (pixelCount > 0) {
+                            motionGrid[i][j] = Math.min(1, motion / (pixelCount * 100));
+                        }
+                    }
+                }
+            }
+            
+            previousFrame = currentFrame;
+        }
+        
+        function getMotionAtPosition(x, y) {
+            const cols = settings.gridResolution;
+            const rows = Math.floor(settings.gridResolution * (canvas.height / canvas.width));
+            
+            const gridX = Math.floor((x / canvas.width) * cols);
+            const gridY = Math.floor((y / canvas.height) * rows);
+            
+            if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
+                return motionGrid[gridX][gridY];
+            }
+            return 0;
+        }
+        
+        function animate() {
+            ctx.fillStyle = 'rgba(10, 14, 39, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            detectMotion();
+            
+            // Draw faint skyline guide
+            ctx.strokeStyle = 'rgba(100, 150, 255, 0.1)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < skylinePoints.length; i++) {
+                const point = skylinePoints[i];
+                const x = point.x * canvas.width;
+                const y = point.y * canvas.height;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // Update and draw particles
+            particles.forEach(particle => {
+                const motion = getMotionAtPosition(particle.x, particle.y);
+                particle.update(motion);
+                particle.draw();
+            });
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Setup controls
+        function setupControls() {
+            // Particle count
+            const particleCountSlider = document.getElementById('particleCount');
+            particleCountSlider.addEventListener('input', (e) => {
+                settings.particleCount = parseInt(e.target.value);
+                document.getElementById('particleCountValue').textContent = settings.particleCount;
+                initParticles();
+            });
+            
+            // Gravity
+            const gravitySlider = document.getElementById('gravity');
+            gravitySlider.addEventListener('input', (e) => {
+                settings.gravity = parseFloat(e.target.value);
+                document.getElementById('gravityValue').textContent = settings.gravity;
+            });
+            
+            // Sensitivity
+            const sensitivitySlider = document.getElementById('sensitivity');
+            sensitivitySlider.addEventListener('input', (e) => {
+                settings.sensitivity = parseInt(e.target.value);
+                document.getElementById('sensitivityValue').textContent = settings.sensitivity;
+            });
+            
+            // Grid resolution
+            const gridResSlider = document.getElementById('gridRes');
+            gridResSlider.addEventListener('input', (e) => {
+                settings.gridResolution = parseInt(e.target.value);
+                document.getElementById('gridResValue').textContent = settings.gridResolution;
+                initMotionGrid();
+            });
+            
+            // Return time
+            const returnTimeSlider = document.getElementById('returnTime');
+            returnTimeSlider.addEventListener('input', (e) => {
+                settings.returnTime = parseInt(e.target.value);
+                document.getElementById('returnTimeValue').textContent = settings.returnTime;
+            });
+            
+            // Lift force
+            const liftForceSlider = document.getElementById('liftForce');
+            liftForceSlider.addEventListener('input', (e) => {
+                settings.liftForce = parseFloat(e.target.value);
+                document.getElementById('liftForceValue').textContent = settings.liftForce;
+            });
+            
+            // Buttons
+            document.getElementById('toggleUI').addEventListener('click', () => {
+                uiHidden = !uiHidden;
+                document.getElementById('controls').classList.toggle('hidden');
+                document.getElementById('toggleUI').textContent = uiHidden ? 'Show UI' : 'Hide UI';
+            });
+            
+            document.getElementById('fullscreenBtn').addEventListener('click', () => {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    document.documentElement.requestFullscreen();
+                }
+            });
+            
+            document.getElementById('mirrorBtn').addEventListener('click', () => {
+                mirrored = !mirrored;
+                document.getElementById('mirrorBtn').textContent = mirrored ? 'Unmirror' : 'Mirror';
+            });
+            
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                initParticles();
+                initMotionGrid();
+            });
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            initCanvas();
+            initMotionGrid();
+        });
+        
+        // Initialize everything
+        initCanvas();
+        initParticles();
+        initMotionGrid();
+        setupControls();
+        initCamera();
+        animate();
+    </script>
+</body>
+</html>
